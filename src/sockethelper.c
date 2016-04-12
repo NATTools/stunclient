@@ -109,7 +109,7 @@ createLocalSocket(int                    ai_family,
 void*
 socketListenDemux(void* ptr)
 {
-  struct pollfd           ufds[10];
+  struct pollfd           ufds[MAX_LISTEN_SOCKETS];
   struct listenConfig*    config = (struct listenConfig*)ptr;
   struct sockaddr_storage their_addr;
   unsigned char           buf[MAXBUFLEN];
@@ -244,7 +244,7 @@ socketListenDemux(void* ptr)
 void*
 socketListenDemux(void* ptr)
 {
-  struct pollfd           ufds[10];
+  struct pollfd           ufds[MAX_LISTEN_SOCKETS];
   struct listenConfig*    config = (struct listenConfig*)ptr;
   struct sockaddr_storage their_addr;
   unsigned char           buf[MAXBUFLEN];
@@ -305,8 +305,7 @@ socketListenDemux(void* ptr)
         /* printf("\nIncomming...(i:%i, len:%i, proto:%i, from: %s)\n", i, */
         /* numbytes, ip_packet->ip_p, sockaddr_toString( (const struct
          * sockaddr*) &their_addr,addr,SOCKADDR_MAX_STRLEN,true)); */
-        if (i == 0)
-        {
+
           if ( stunlib_isStunMsg(buf, numbytes) )
           {
             /* Send to STUN, with CB to data handler if STUN packet contations
@@ -319,22 +318,7 @@ socketListenDemux(void* ptr)
                                  numbytes);
             continue;
           }
-        }
-        if (i == 1)
-        {
-
-          /* TODO IPV6..*/
-          /* Quick sanity if this is ICMP ?... */
-
-          /* printf("Sockethelper sending to icmp handler (proto:%i)\n",
-           * ip_packet->ip_p); */
-          config->icmp_handler( &config->socketConfig[i],
-                                (struct sockaddr*)&their_addr,
-                                config->tInst,
-                                getICMPTypeFromBuf(AF_INET, buf) );
-          continue;
-        }
-
+  
       }
     }
   }

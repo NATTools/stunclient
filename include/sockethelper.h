@@ -11,7 +11,7 @@
 #include <stunlib.h>
 
 #define MAXBUFLEN 4048
-#define MAX_LISTEN_SOCKETS 10
+#define MAX_LISTEN_SOCKETS 50
 
 
 struct socketConfig {
