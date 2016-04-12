@@ -22,6 +22,8 @@ before_install:
     then
     brew update;
     brew outdated cmake || brew upgrade cmake;
+    else
+    sudo apt-get install libuv-dev
     fi
   - export PATH=$HOME/.local/bin:$PATH
   - pip install cpp-coveralls --user `whoami`
