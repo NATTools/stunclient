@@ -243,7 +243,7 @@ stunHandler(struct socketConfig* config,
 void
 printUsage()
 {
-  printf("Usage: nptrace [options] host\n");
+  printf("Usage: stunclient [options] server\n");
   printf("Options: \n");
   printf("  -i, --interface           Interface\n");
   printf("  -p <port>, --port <port>  Destination port\n");
