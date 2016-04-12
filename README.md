@@ -1,5 +1,7 @@
 # stunclient
-A simple stunclient implementation
+
+A simple stunclient implementation. This client only sends and receives "ping
+tests" and does not implement the RFC 3489 algorithm to detect the type of NAT. 
 
 ## Compiling
 
