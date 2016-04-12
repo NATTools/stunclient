@@ -37,7 +37,7 @@
 #include "utils.h"
 #include "iphelper.h"
 #include "sockethelper.h"
-#include "ip_query.h"
+//#include "ip_query.h"
 #include "version.h"
 
 /* int                        sockfd; */
