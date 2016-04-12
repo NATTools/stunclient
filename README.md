@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/NATTools/stunclient.svg?branch=master)](https://travis-ci.org/NATTools/stunclient)
+
 # stunclient
 
 A simple stunclient implementation. This client only sends and receives "ping
