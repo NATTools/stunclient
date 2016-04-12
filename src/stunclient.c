@@ -1,5 +1,5 @@
 /*
-** STUNTrace
+** STUNClient
 */
 
 #include <signal.h>
@@ -32,8 +32,6 @@
 #include <stun_intern.h>
 
 
-#include <uuid/uuid.h>
-
 #include "utils.h"
 #include "iphelper.h"
 #include "sockethelper.h"
@@ -49,7 +47,7 @@ pthread_mutex_t            mutex;
 
 char username[] = "evtj:h6vY\0";
 char password[] = "VOkJxbRl1RmTxUk/WvJxBt\0";
-char uuid_str[37];
+
 #define max_iface_len 10
 
 typedef enum {
@@ -379,9 +377,6 @@ main(int   argc,
 
   /* Set up PAlib */
   gettimeofday(&start, NULL);
-  uuid_t uuid;
-  uuid_generate(uuid);
-  uuid_unparse_lower(uuid, uuid_str);
 
   /* Read cmd line argumens and set it up */
   configure(&config,argc,argv);
@@ -421,8 +416,6 @@ main(int   argc,
                              addrStr,
                              sizeof(addrStr),
                              true ) );
-  printf("UUID: %s\n", uuid_str);
-
 
   for (int i = 0; i < listenConfig.numSockets; i++)
   {
