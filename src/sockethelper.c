@@ -11,12 +11,6 @@
 
 #include <netinet/ip.h>
 #include <netinet/ip_icmp.h>
-#ifdef __linux
-#include <linux/types.h>        /* required for linux/errqueue.h */
-#include <linux/errqueue.h>     /* SO_EE_ORIGIN_ICMP */
-#endif
-
-
 #include <stunclient.h>
 #include "sockethelper.h"
 #include "utils.h"
@@ -105,142 +99,6 @@ createLocalSocket(int                    ai_family,
   return sockfd;
 }
 
-#if defined(__linux)
-void*
-socketListenDemux(void* ptr)
-{
-  struct pollfd           ufds[MAX_LISTEN_SOCKETS];
-  struct listenConfig*    config = (struct listenConfig*)ptr;
-  struct sockaddr_storage their_addr;
-  unsigned char           buf[MAXBUFLEN];
-  socklen_t               addr_len;
-  int                     rv;
-  int                     numbytes;
-  int                     i;
-
-  /* int  keyLen = 16; */
-  /* char md5[keyLen]; */
-
-  for (i = 0; i < config->numSockets; i++)
-  {
-    ufds[i].fd     = config->socketConfig[i].sockfd;
-    ufds[i].events = POLLIN;
-  }
-
-  addr_len = sizeof their_addr;
-
-  while (1)
-  {
-    rv = poll(ufds, config->numSockets, -1);
-    if (rv == -1)
-    {
-        perror("poll");     /* error occurred in poll() */
-    }
-    else if (rv == 0)
-    {
-      printf("Timeout occurred! (Should not happen)\n");
-    }
-    else
-    {
-      /* check for events on s1: */
-      for (i = 0; i < config->numSockets; i++)
-      {
-
-        if (ufds[i].revents & POLLERR)
-        {
-          /* Do stuff with msghdr */
-          struct msghdr      msg;
-          struct sockaddr_in response;                          /* host answered
-                                                                 * IP_RECVERR */
-          char            control_buf[1500];
-          struct iovec    iov;
-          char            buf[1500];
-          struct cmsghdr* cmsg;
-
-          memset( &msg, 0, sizeof(msg) );
-          msg.msg_name       = &response;                       /* host */
-          msg.msg_namelen    = sizeof(response);
-          msg.msg_control    = control_buf;
-          msg.msg_controllen = sizeof(control_buf);
-          iov.iov_base       = buf;
-          iov.iov_len        = sizeof(buf);
-          msg.msg_iov        = &iov;
-          msg.msg_iovlen     = 1;
-
-          if (recvmsg(ufds[i].fd, &msg, MSG_ERRQUEUE) == -1)
-          {
-            /* Ignore for now. Will get it later.. */
-            continue;
-          }
-          for ( cmsg = CMSG_FIRSTHDR(&msg); cmsg != NULL;
-                cmsg = CMSG_NXTHDR(&msg,cmsg) )
-          {
-            if ( (cmsg->cmsg_level == IPPROTO_IP) &&
-                 (cmsg->cmsg_type == IP_RECVERR) )
-            {
-              struct sock_extended_err* ee;
-              ee = (struct sock_extended_err*) CMSG_DATA(cmsg);
-
-              if (ee->ee_origin == SO_EE_ORIGIN_ICMP)
-              {
-                config->icmp_handler(&config->socketConfig[1],
-                                     SO_EE_OFFENDER(ee),
-                                     config->tInst,
-                                     ee->ee_type);
-              }
-            }
-          }
-          continue;
-        }
-
-        if (ufds[i].revents & POLLIN)
-        {
-          numbytes = 0;
-          if ( ( numbytes =
-                   recvfrom(config->socketConfig[i].sockfd, buf, MAXBUFLEN, 0,
-                            (struct sockaddr*)&their_addr, &addr_len) ) == -1 )
-          {
-            perror("recvfrom");
-            exit(1);
-          }
-        }
-          printf("\n sockethelper_ got something..(i:%i, len:%i)\n", i,
-               numbytes);
-        if ( stunlib_isStunMsg(buf, numbytes) )
-        {
-          /* Send to STUN, with CB to data handler if STUN packet contations
-           * DATA */
-          printf("Ssockethelper sending to stun handler (%i)\n", numbytes);
-          config->stun_handler(&config->socketConfig[i],
-                               (struct sockaddr*)&their_addr,
-                               config->tInst,
-                               buf,
-                               numbytes);
-          memset(buf, 0, MAXBUFLEN);
-        }
-        else
-        {
-
-          /* Nasty hack on osx to ignore not ICMP ports.. */
-          if ( (i == 0) && (config->numSockets == 2) )
-          {
-            continue;
-          }
-          /* TODO IPV6..*/
-          printf("Ssockethelper sending to icmp handler\n");
-          config->icmp_handler( &config->socketConfig[i],
-                                (struct sockaddr*)&their_addr,
-                                config->tInst,
-                                getICMPTypeFromBuf(AF_INET, buf) );
-          memset(buf, 0, MAXBUFLEN);
-        }
-
-      }
-    }
-  }
-}
-#endif
-#if defined(__APPLE__)
 void*
 socketListenDemux(void* ptr)
 {
@@ -318,12 +176,11 @@ socketListenDemux(void* ptr)
                                  numbytes);
             continue;
           }
-  
+
       }
     }
   }
 }
-#endif
 
 
 
