@@ -163,19 +163,21 @@ socketListenDemux(void* ptr)
         /* printf("\nIncomming...(i:%i, len:%i, proto:%i, from: %s)\n", i, */
         /* numbytes, ip_packet->ip_p, sockaddr_toString( (const struct
          * sockaddr*) &their_addr,addr,SOCKADDR_MAX_STRLEN,true)); */
-
-          if ( stunlib_isStunMsg(buf, numbytes) )
-          {
-            /* Send to STUN, with CB to data handler if STUN packet contations
-             * DATA */
-            /* printf("Ssockethelper sending to stun handler (%i)\n", numbytes); */
-            config->stun_handler(&config->socketConfig[i],
-                                 (struct sockaddr*)&their_addr,
-                                 config->tInst,
-                                 buf,
-                                 numbytes);
-            continue;
-          }
+        /* printf("Got packet\n"); */
+        if ( stunlib_isStunMsg(buf, numbytes) )
+        {
+          /* printf("Packet is STUN\n"); */
+          /* Send to STUN, with CB to data handler if STUN packet contations
+           * DATA */
+          /* printf("Ssockethelper sending to stun handler (%i)\n", numbytes);
+           * */
+          config->stun_handler(&config->socketConfig[i],
+                               (struct sockaddr*)&their_addr,
+                               config->tInst,
+                               buf,
+                               numbytes);
+          continue;
+        }
 
       }
     }

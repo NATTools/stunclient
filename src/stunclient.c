@@ -35,7 +35,7 @@
 #include "utils.h"
 #include "iphelper.h"
 #include "sockethelper.h"
-//#include "ip_query.h"
+/* #include "ip_query.h" */
 #include "version.h"
 
 /* int                        sockfd; */
@@ -50,13 +50,6 @@ char password[] = "VOkJxbRl1RmTxUk/WvJxBt\0";
 
 #define max_iface_len 10
 
-typedef enum {
-  txt,
-  json,
-  csv
-} OUTPUT_FORMAT;
-
-OUTPUT_FORMAT out_format = txt;
 
 struct client_config {
   char                    interface[10];
@@ -65,7 +58,93 @@ struct client_config {
   int                     port;
   int                     jobs;
   bool                    debug;
+  bool                    csv_output;
 };
+static struct client_config config;
+
+struct stunTransSummary {
+  int32_t  numTransactions;
+  int32_t  numFailedTransactions;
+  int32_t  maxRTT;
+  int32_t  minRTT;
+  int32_t  sumRTT;
+  int32_t  numRetrans;
+  int32_t  numClientSent;
+  int32_t  numServSent;
+  uint16_t startPort;
+  uint16_t stopPort;
+};
+
+static struct stunTransSummary stunTransSummary;
+
+static void
+initSummary()
+{
+  stunTransSummary.numTransactions       = 0;
+  stunTransSummary.numFailedTransactions = 0;
+  stunTransSummary.maxRTT                = 0;
+  stunTransSummary.minRTT                = 0;
+  stunTransSummary.sumRTT                = 0;
+  stunTransSummary.numRetrans            = 0;
+  stunTransSummary.numClientSent         = 0;
+  stunTransSummary.numServSent           = 0;
+}
+
+static void
+printCSV(/* arguments */)
+{
+  time_t     nowtime;
+  struct tm* nowtm;
+  char       tmbuf[64], buf[64];
+
+  /* gettimeofday(&tv, NULL); */
+  nowtime = start.tv_sec;
+  nowtm   = localtime(&nowtime);
+  strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
+  snprintf(buf, sizeof buf, "%s.%06d", tmbuf, start.tv_usec);
+  printf("%s, ", buf);
+
+  nowtime = stop.tv_sec;
+  nowtm   = localtime(&nowtime);
+  strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
+  snprintf(buf, sizeof buf, "%s.%06d", tmbuf, stop.tv_usec);
+  printf("%s, ", buf);
+
+  printf("%i, %i, %i, %i, %i, %i, %i, %i, %i, %i\n",
+         stunTransSummary.numTransactions,
+         stunTransSummary.numFailedTransactions,
+         stunTransSummary.maxRTT,
+         stunTransSummary.minRTT,
+         stunTransSummary.sumRTT / stunTransSummary.numTransactions,
+         stunTransSummary.numRetrans,
+         stunTransSummary.numClientSent,
+         stunTransSummary.numServSent,
+         stunTransSummary.startPort,
+         stunTransSummary.stopPort
+         );
+
+}
+
+static void
+printSummary(/* arguments */)
+{
+  printf(
+    "  Num Trans  Failed      Max RTT  Min RTT  Avg RTT  Retrans    Client  Server  Port Range\n");
+  printf(
+    "     %i        %i    %i    %i    %i      %i         %i      %i  %i-%i\n",
+    stunTransSummary.numTransactions,
+    stunTransSummary.numFailedTransactions,
+    stunTransSummary.maxRTT,
+    stunTransSummary.minRTT,
+    stunTransSummary.sumRTT / stunTransSummary.numTransactions,
+    stunTransSummary.numRetrans,
+    stunTransSummary.numClientSent,
+    stunTransSummary.numServSent,
+    stunTransSummary.startPort,
+    stunTransSummary.stopPort
+    );
+
+}
 
 static void
 teardown()
@@ -83,7 +162,7 @@ void
 printTimeSpent()
 {
   int time;
-  gettimeofday(&stop, NULL);
+
 
   time =
     (stop.tv_sec * 1000000 +
@@ -97,29 +176,60 @@ handleStunResp(const StunMsgId*       msgId,
                const struct sockaddr* serverAddr,
                const struct sockaddr* rflxAddr,
                const int              rtt,
-               const int              retrans)
+               const int              retrans,
+               const int              req,
+               const int              resp)
 {
   char addr_str[SOCKADDR_MAX_STRLEN];
-  printf("----------- Start: %i -----------------\n", numresp);
-  printf("TransID: ");
-  for (int i = 0; i < STUN_MSG_ID_SIZE; i++)
+  if (!config.csv_output)
   {
-    printf("%02x", msgId->octet[i]);
+    printf("----------- Start: %i -----------------\n", numresp);
+    printf("TransID: ");
+    for (int i = 0; i < STUN_MSG_ID_SIZE; i++)
+    {
+      printf("%02x", msgId->octet[i]);
+    }
+    printf( "\n");
+    printf( "src addr: %s\n",
+            sockaddr_toString(serverAddr,
+                              addr_str,
+                              sizeof(addr_str),
+                              true) );
+    printf( "rflx addr: %s\n",
+            sockaddr_toString(rflxAddr,
+                              addr_str,
+                              sizeof(addr_str),
+                              true) );
+    printf("RTT: %i\n",                                 rtt);
+    printf("Retrans: %i\n",                             retrans);
+    printf("Sent requests: %i\n",                       req);
+    printf("Responses sent by server: %i\n",            resp);
+    printf("------------ End: %i ------------------\n", numresp);
   }
-  printf( "\n");
-  printf( "src addr: %s\n",
-          sockaddr_toString(serverAddr,
-                            addr_str,
-                            sizeof(addr_str),
-                            true) );
-  printf( "rflx addr: %s\n",
-          sockaddr_toString(rflxAddr,
-                            addr_str,
-                            sizeof(addr_str),
-                            true) );
-  printf("RTT: %i\n",                                 rtt);
-  printf("Retrans: %i\n",                             retrans);
-  printf("------------ End: %i ------------------\n", numresp);
+  stunTransSummary.numTransactions++;
+  if (stunTransSummary.maxRTT < rtt)
+  {
+    stunTransSummary.maxRTT = rtt;
+  }
+  if ( (stunTransSummary.minRTT > rtt) || (stunTransSummary.minRTT == 0) )
+  {
+    stunTransSummary.minRTT = rtt;
+  }
+  stunTransSummary.sumRTT        += rtt;
+  stunTransSummary.numRetrans    += retrans;
+  stunTransSummary.numClientSent += req;
+  stunTransSummary.numServSent   += resp;
+  uint16_t port = sockaddr_ipPort(rflxAddr);
+  if ( (stunTransSummary.startPort > port) ||
+       (stunTransSummary.startPort == 0) )
+  {
+    stunTransSummary.startPort = port;
+  }
+  if (stunTransSummary.stopPort < port)
+  {
+    stunTransSummary.stopPort = port;
+  }
+
 }
 
 void
@@ -136,13 +246,20 @@ StunCallBack(void*               userCtx,
                    (struct sockaddr*)&data->srcAddr,
                    (struct sockaddr*)&data->rflxAddr,
                    data->rtt,
-                   data->retransmits);
+                   data->retransmits,
+                   data->reqTransCnt,
+                   data->respTransCnt);
     break;
   case StunResult_ICMPResp:
     printf("Got ICMP response (Should check if it is host unreachable?)\n");
     break;
   case StunResult_BindFailNoAnswer:
-    printf("No answer from stunserver\n");
+    stunTransSummary.numTransactions++;
+    stunTransSummary.numFailedTransactions++;
+    if (!config.csv_output)
+    {
+      printf("No answer from stunserver\n");
+    }
     break;
   default:
     printf("Unhandled..\n");
@@ -152,8 +269,17 @@ StunCallBack(void*               userCtx,
 
   if (numresp >= listenConfig.numSockets)
   {
-    //Todo: Check what transactions and so on we are missing..
-    printTimeSpent();
+    gettimeofday(&stop, NULL);
+    /* Todo: Check what transactions and so on we are missing.. */
+    if (config.csv_output)
+    {
+      printCSV();
+    }
+    else
+    {
+      printSummary();
+      printTimeSpent();
+    }
     teardown();
   }
 }
@@ -235,6 +361,11 @@ stunHandler(struct socketConfig* config,
                              &stunResponse,
                              from_addr);
   }
+  else
+  {
+    printf("STUN Decode failed\n");
+  }
+
 }
 
 
@@ -273,6 +404,7 @@ configure(struct client_config* config,
     {"port", 1, 0, 'p'},
     {"jobs", 1, 0, 'j'},
     {"debug", 0, 0, 'd'},
+    {"csv", 0, 0, '2'},
     {"help", 0, 0, 'h'},
     {"version", 0, 0, 'v'},
     {NULL, 0, NULL, 0}
@@ -283,7 +415,7 @@ configure(struct client_config* config,
     exit(0);
   }
   int option_index = 0;
-  while ( ( c = getopt_long(argc, argv, "hvdli:p:j:M:w:r:",
+  while ( ( c = getopt_long(argc, argv, "hvdi:p:j:o:",
                             long_options, &option_index) ) != -1 )
   {
     /* int this_option_optind = optind ? optind : 1; */
@@ -300,6 +432,9 @@ configure(struct client_config* config,
       break;
     case 'j':
       config->jobs = atoi(optarg);
+      break;
+    case '2':
+      config->csv_output = true;
       break;
     case 'h':
       printUsage();
@@ -369,11 +504,14 @@ main(int   argc,
   STUN_CLIENT_DATA* clientData;
   char              addrStr[SOCKADDR_MAX_STRLEN];
 
-  struct client_config config;
-  StunMsgId            stunMsgId;
-  time_t               t;
+
+  StunMsgId stunMsgId;
+  /* time_t t; */
   /* Initialise the random seed. */
-  srand( time(&t) );
+  /* srand( time(&t) ); */
+
+
+  initSummary();
 
   /* Set up PAlib */
   gettimeofday(&start, NULL);
@@ -393,7 +531,6 @@ main(int   argc,
   /* Turn on debugging */
   if (config.debug)
   {
-    printf("Registering logger\n");
     StunClient_RegisterLogger(clientData,
                               stundbg,
                               clientData);
@@ -403,24 +540,25 @@ main(int   argc,
                  NULL,
                  socketListenDemux,
                  (void*)&listenConfig);
+  if (!config.csv_output)
+  {
+    printf( "Sending binding  %i Req(s) from: '%s'",
+            config.jobs,
+            sockaddr_toString( (struct sockaddr*)&config.localAddr,
+                               addrStr,
+                               sizeof(addrStr),
+                               true ) );
 
-  printf( "Sending binding  %i Req(s) from: '%s'",
-          config.jobs,
-          sockaddr_toString( (struct sockaddr*)&config.localAddr,
-                             addrStr,
-                             sizeof(addrStr),
-                             true ) );
-
-  printf( "to: '%s'\n",
-          sockaddr_toString( (struct sockaddr*)&config.remoteAddr,
-                             addrStr,
-                             sizeof(addrStr),
-                             true ) );
-
+    printf( "to: '%s'\n",
+            sockaddr_toString( (struct sockaddr*)&config.remoteAddr,
+                               addrStr,
+                               sizeof(addrStr),
+                               true ) );
+  }
   for (int i = 0; i < listenConfig.numSockets; i++)
   {
-    stunlib_createId( &stunMsgId,
-                      rand(), rand() );
+    stunlib_createId(&stunMsgId);
+
     StunClient_startBindTransaction(clientData,
                                     &config,
                                     (const struct sockaddr*)&config.remoteAddr,
