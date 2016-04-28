@@ -16,12 +16,13 @@ addons:
       - libuv-dev
       - cmake
       - cmake-data
+      - libbsd-dev
 
 before_install:
   - if [[ $TRAVIS_OS_NAME == 'osx' ]];
     then
     brew update;
-    brew outdated cmake || brew upgrade cmake;  
+    brew outdated cmake || brew upgrade cmake;
     fi
   - export PATH=$HOME/.local/bin:$PATH
   - pip install cpp-coveralls --user `whoami`
