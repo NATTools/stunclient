@@ -101,13 +101,22 @@ printCSV(/* arguments */)
   nowtime = start.tv_sec;
   nowtm   = localtime(&nowtime);
   strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
+  #ifdef __APPLE__
+  snprintf(buf, sizeof buf, "%s.%06d", tmbuf, start.tv_usec);
+  #else
   snprintf(buf, sizeof buf, "%s.%06ld", tmbuf, start.tv_usec);
+  #endif
+
   printf("%s, ", buf);
 
   nowtime = stop.tv_sec;
   nowtm   = localtime(&nowtime);
   strftime(tmbuf, sizeof tmbuf, "%Y-%m-%d %H:%M:%S", nowtm);
+  #ifdef __APPLE__
+  snprintf(buf, sizeof buf, "%s.%06d", tmbuf, stop.tv_usec);
+  #else
   snprintf(buf, sizeof buf, "%s.%06ld", tmbuf, stop.tv_usec);
+  #endif
   printf("%s, ", buf);
 
   printf("%i, %i, %i, %i, %i, %i, %i, %i, %i, %i\n",
