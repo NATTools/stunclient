@@ -1,27 +1,37 @@
 #!/bin/bash
 
-#ips=$(sudo nmap -sP 192.168.0.1/24 | awk '/^Nmap/ { printf $5" " } /MAC/ { print }' - | grep Raspberry |awk '{print $1}')
 filename=ip_list.conf
+stun_server=pem@192.168.1.10
+
 if [ ! -f $filename ]; then
     echo "No Raspberry IPs found. Running nmap (requires sudo)"
     ./ip_list_update.sh
 fi
+#start the stun server(s)
+
+ssh -n -f $stun_server "sh -c 'cd /home/pem/development/stunserver/; nohup ./nattorture_start.sh -i eth0 -f nattorture.csv > /dev/null 2>&1 &'"
 
 while read -r ip
 do
-    echo $ip
+    echo "Starting job on: $ip"
     ssh -n -f pi@$ip "sh -c 'cd /home/pi/development/stunclient/; nohup ./nattorture.sh -i eth0 -r 400 -f nattorture.csv 192.168.1.10> /dev/null 2>&1 &'"
 done < "$filename"
 
-#ips="192.168.0.106 192.168.0.102 192.168.0.103 192.168.0.100"
-#for i in $ips; do
-#  ssh -n -f pi@$i "sh -c 'cd /home/pi/development/stunclient/; nohup ./nattorture.sh -i eth0 -r 400 -f nattorture.csv 192.168.1.10> /dev/null 2>&1 &'"
-#done
+echo "Waiting for server to finish.."
+ssh $stun_server 'cd /home/pem/development/stunserver; ./doneyet.sh'
 
-#ssh -n -f pi@192.168.0.106 "sh -c 'cd /home/pi/development/stunclient/; nohup ./nattorture.sh -i eth0 -r 400 -f nattorture.csv 192.168.1.10> /dev/null 2>&1 &'"
-#ssh -n -f pi@192.168.0.102 "sh -c 'cd /home/pi/development/stunclient/; nohup ./nattorture.sh -i eth0 -r 400 -f nattorture.csv 192.168.1.10> /dev/null 2>&1 &'"
-#ssh -n -f pi@192.168.0.103 "sh -c 'cd /home/pi/development/stunclient/; nohup ./nattorture.sh -i eth0 -r 400 -f nattorture.csv 192.168.1.10> /dev/null 2>&1 &'"
+mkdir pack
+while read -r ip
+do
+    echo "Retrieving client logs: $ip"
+    scp pi@$ip:/home/pi/development/stunclient/nattorture.csv pack/"$ip"_nattorture.csv
+done < "$filename"
 
-#Start one loccaly as well
-#./nattorture.sh -i en0 -r 400 -o nattorture.csv 192.168.1.10
-#done
+echo "Retrieving server log"
+scp $stun_server:/home/pem/development/stunserver/nattorture.csv pack/server_nattorture.csv
+
+echo "Packing up"
+cd pack
+tar -cvzf  ../nattorture.tar.gz *.csv
+cd ..
+rm -rf pack
