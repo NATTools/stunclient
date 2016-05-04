@@ -4,8 +4,8 @@ filename=ip_list.conf
 script_file=term.scpt
 x=850
 y=400
-startx=800
-starty=160
+startx=-1400
+starty=50
 i=0
 j=0
 
