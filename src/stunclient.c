@@ -513,8 +513,6 @@ main(int   argc,
   STUN_CLIENT_DATA* clientData;
   char              addrStr[SOCKADDR_MAX_STRLEN];
 
-
-  StunMsgId stunMsgId;
   /* time_t t; */
   /* Initialise the random seed. */
   /* srand( time(&t) ); */
@@ -565,7 +563,18 @@ main(int   argc,
   }
   for (int i = 0; i < listenConfig.numSockets; i++)
   {
-    stunlib_createId(&stunMsgId);
+    TransactionAttributes transAttr;
+    stunlib_createId(&transAttr.transactionId);
+    transAttr.sockhandle = listenConfig.socketConfig[i].sockfd;
+    strncpy( transAttr.username, username, strlen(username) );
+    strncpy( transAttr.password, password, strlen(password) );
+    transAttr.peerPriority                    = 34567;
+    transAttr.useCandidate                    = false;
+    transAttr.iceControlling                  = false;
+    transAttr.tieBreaker                      = 4567;
+    transAttr.addEnf                          = true;
+    transAttr.enfFlowDescription.type         = 0x04;
+    transAttr.enfFlowDescription.bandwidthMax = 4096;
 
     StunClient_startBindTransaction(clientData,
                                     &config,
@@ -573,17 +582,9 @@ main(int   argc,
                                     (const struct sockaddr*)&config.localAddr,
                                     17,
                                     false,
-                                    username,
-                                    password,
-                                    0,
-                                    false,
-                                    false,
-                                    0,
-                                    stunMsgId,
-                                    listenConfig.socketConfig[i].sockfd,
+                                    &transAttr,
                                     sendPacket,
-                                    StunCallBack,
-                                    NULL);
+                                    StunCallBack);
   }
   pause();
 }
