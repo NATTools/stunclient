@@ -13,6 +13,10 @@ runs=10
 output_file="out.csv"
 test_name="test"
 
+lockfile=nattorture.lock
+
+touch $lockfile
+
 while getopts "h?i:f:r:o:t:" opt; do
     case "$opt" in
     h|\?)
@@ -37,7 +41,7 @@ shift $((OPTIND-1))
 ip=$@
 echo "interface=$interface, output_file='$output_file',runs='$runs', ip: $ip"
 
-
+rm output_file
 printf "Name, run, Start, stop, transactions, failed, max rtt, min rtt, avg rtt, retries, client sent, server sent, start port, stop port\n" > $output_file
 for (( i=1; i<=$runs; i++ ))
 do
@@ -45,3 +49,5 @@ do
   printf "$test_name, $i, " >> $output_file
  build/dist/bin/stunclient -i $interface $ip -j 60 --csv >> $output_file
 done
+
+rm $lockfile
