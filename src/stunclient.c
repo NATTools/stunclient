@@ -478,6 +478,50 @@ configure(struct client_config* config,
     exit(1);
   }
 
+
+  if(sockaddr_isAddrLinkLocal((struct sockaddr*)&config->localAddr))
+  {
+    if( !getLocalInterFaceAddrs( (struct sockaddr*)&config->localAddr,
+                                config->interface,
+                                  AF_INET6,
+                                IPv6_ADDR_NORMAL,
+                                false ) )
+    {
+      printf("Error getting IPaddr on %s\n", config->interface);
+      exit(1);
+    }
+
+
+    //Ok running NAT64. Need to synthesize IPv4 remote addr...
+    printf("Running NAT64....\n");
+    char              v4Str[SOCKADDR_MAX_STRLEN];
+    char              v6Str[SOCKADDR_MAX_STRLEN];
+
+    unsigned int port = sockaddr_ipPort ((struct sockaddr*)&config->remoteAddr);
+
+    sockaddr_toString( (struct sockaddr*)&config->remoteAddr,
+                               v4Str,
+                               sizeof(v4Str),
+                               false );
+    printf("IPv4: %s \n", v4Str);
+
+    //Todo: get prefix form stuarts arp tricks...
+    //https://tools.ietf.org/html/draft-cheshire-sudn-ipv4only-dot-arpa-08
+    snprintf(v6Str, sizeof(v6Str), "64:ff9b::%s", v4Str);
+    printf("IPv6: %s \n", v6Str);
+    
+    if (!sockaddr_initFromIPv6String((struct sockaddr_in6*)&config->remoteAddr,
+                                v6Str)){
+      printf("Something failed!\n");
+    }
+
+    sockaddr_setPort((struct sockaddr*)&config->remoteAddr, port);
+    sockaddr_toString( (struct sockaddr*)&config->remoteAddr,
+                               v6Str,
+                               sizeof(v6Str),
+                               false );
+    printf("IPv6 (syn): %s \n", v6Str);
+  }
 }
 
 
