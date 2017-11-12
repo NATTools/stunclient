@@ -394,6 +394,121 @@ printUsage()
 }
 
 
+bool detectNAT64(struct sockaddr *prefix)
+{
+  int sockfd;  
+  struct addrinfo hints, *servinfo, *p;
+  int rv;
+
+  char              addrStr[SOCKADDR_MAX_STRLEN];
+
+  memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_UNSPEC; // use AF_INET6 to force IPv6
+  hints.ai_socktype = SOCK_STREAM;
+
+  if ((rv = getaddrinfo("ipv4only.arpa", NULL, &hints, &servinfo)) != 0) {
+      fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+      exit(1);
+  }
+
+  //Do not do this at home...
+  int ipv4_num = 0;
+  struct sockaddr_storage ipv4[2];
+  int ipv6_num = 0;
+  struct sockaddr_storage ipv6[2];
+  
+
+  for(p = servinfo; p != NULL; p = p->ai_next) {
+      if ((sockfd = socket(p->ai_family, p->ai_socktype,
+              p->ai_protocol)) == -1) {
+          perror("socket");
+          continue;
+      }
+
+
+      printf( "to: '%s'\n",
+            sockaddr_toString( (struct sockaddr*)p->ai_addr,
+                               addrStr,
+                               sizeof(addrStr),
+                               true ) );
+      if (p->ai_family == AF_INET6){
+        memcpy(&ipv6[ipv6_num],(struct sockaddr_in6*)p->ai_addr, sizeof(struct sockaddr_storage) );
+        ipv6_num++;
+        
+
+      }
+      if (p->ai_family == AF_INET){
+        memcpy(&ipv4[ipv4_num],(struct sockaddr_in*)p->ai_addr, sizeof(struct sockaddr_storage) );
+        ipv4_num++;
+        
+      }
+
+    }  
+
+
+    //Sample code only
+    //Should look at RFC6052 tble to to discover the prefixes.
+    //This only discovers the /96 prefix. 
+    if( memcmp( &((struct sockaddr_in*)&ipv4[0])->sin_addr, 
+                &((struct sockaddr_in6*)&ipv6[0])->sin6_addr.s6_addr[12],
+                sizeof(struct in_addr)) ){
+        
+        memcpy(prefix, 
+               (struct sockaddr_in6*)&ipv6[0], 
+               sizeof(struct sockaddr_storage));
+
+        memset(&((struct sockaddr_in6*)prefix)->sin6_addr.s6_addr[12], 
+               0, 
+              sizeof(struct in_addr));
+        return true;
+    }
+    if( memcmp( &((struct sockaddr_in*)&ipv4[1])->sin_addr, 
+                &((struct sockaddr_in6*)&ipv6[0])->sin6_addr.s6_addr[12],
+                sizeof(struct in_addr)) ){
+        memcpy(prefix, 
+               (struct sockaddr_in6*)&ipv6[0], 
+               sizeof(struct sockaddr_storage));
+
+        memset(&((struct sockaddr_in6*)prefix)->sin6_addr.s6_addr[12], 
+               0, 
+              sizeof(struct in_addr));
+        return true;
+    }
+    if( memcmp( &((struct sockaddr_in*)&ipv4[0])->sin_addr, 
+                &((struct sockaddr_in6*)&ipv6[1])->sin6_addr.s6_addr[12],
+                sizeof(struct in_addr)) ){
+        memcpy(prefix, 
+               (struct sockaddr_in6*)&ipv6[1], 
+               sizeof(struct sockaddr_storage));
+
+        memset(&((struct sockaddr_in6*)prefix)->sin6_addr.s6_addr[12], 
+               0, 
+              sizeof(struct in_addr));
+
+        return true;
+    }
+    if( memcmp( &((struct sockaddr_in*)&ipv4[1])->sin_addr, 
+                &((struct sockaddr_in6*)&ipv6[1])->sin6_addr.s6_addr[12],
+                sizeof(struct in_addr)) ){
+        memcpy(prefix, 
+               (struct sockaddr_in6*)&ipv6[1], 
+               sizeof(struct sockaddr_storage));
+
+        memset(&((struct sockaddr_in6*)prefix)->sin6_addr.s6_addr[12], 
+               0, 
+              sizeof(struct in_addr));
+        return true;
+    }
+
+    
+
+    return false;
+  
+
+}
+
+
+
 void
 configure(struct client_config* config,
           int                   argc,
@@ -467,7 +582,17 @@ configure(struct client_config* config,
     }
   }
 
+  struct sockaddr_storage prefix;
+  if( detectNAT64((struct sockaddr*)&prefix) ){
 
+    char              addrStr[SOCKADDR_MAX_STRLEN];
+    printf( "Prefix: '%s'\n", 
+            sockaddr_toString( (struct sockaddr*)&prefix,
+                               addrStr,
+                               sizeof(addrStr),
+                               false));
+  }
+  
   if ( !getLocalInterFaceAddrs( (struct sockaddr*)&config->localAddr,
                                 config->interface,
                                 config->remoteAddr.ss_family,
@@ -496,30 +621,34 @@ configure(struct client_config* config,
     printf("Running NAT64....\n");
     char              v4Str[SOCKADDR_MAX_STRLEN];
     char              v6Str[SOCKADDR_MAX_STRLEN];
+    char              prefixStr[SOCKADDR_MAX_STRLEN];
 
     unsigned int port = sockaddr_ipPort ((struct sockaddr*)&config->remoteAddr);
 
     sockaddr_toString( (struct sockaddr*)&config->remoteAddr,
                                v4Str,
                                sizeof(v4Str),
-                               false );
+                              false );
     printf("IPv4: %s \n", v4Str);
 
-    //Todo: get prefix form stuarts arp tricks...
-    //https://tools.ietf.org/html/draft-cheshire-sudn-ipv4only-dot-arpa-08
-    snprintf(v6Str, sizeof(v6Str), "64:ff9b::%s", v4Str);
+    sockaddr_toString( (struct sockaddr*)&prefix,
+                               prefixStr,
+                               sizeof(v4Str),
+                              false );
+
+    snprintf(v6Str, sizeof(v6Str), "%s%s", prefixStr,v4Str);
     printf("IPv6: %s \n", v6Str);
-    
+
     if (!sockaddr_initFromIPv6String((struct sockaddr_in6*)&config->remoteAddr,
                                 v6Str)){
       printf("Something failed!\n");
     }
 
-    sockaddr_setPort((struct sockaddr*)&config->remoteAddr, port);
+    sockaddr_setPort((struct sockaddr*)&config->remoteAddr, port);    
     sockaddr_toString( (struct sockaddr*)&config->remoteAddr,
                                v6Str,
                                sizeof(v6Str),
-                               false );
+                              false );
     printf("IPv6 (syn): %s \n", v6Str);
   }
 }
@@ -547,6 +676,7 @@ setupSocket(struct client_config* config,
 
 
 
+
 int
 main(int   argc,
      char* argv[])
@@ -568,7 +698,8 @@ main(int   argc,
 
   /* Read cmd line argumens and set it up */
   configure(&config,argc,argv);
-
+  
+  
   /* Initialize STUNclient data structures */
   StunClient_Alloc(&clientData);
 
